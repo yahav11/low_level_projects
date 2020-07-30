@@ -7,16 +7,19 @@
 #include <unistd.h>
 #include <string.h>
 
-
-#define OPCODE_SIZE (16)
-#define X64ADDRESS_SIZE (8)
-#define ASIGN_OPCODE_OFFSET (2)
 #define RETURN_OPCODE (-61)
-#define BYTE_SIZE (8)
+#define JMP_OPCODE_SIZE (12)
+#define CALL_OPCODE_SIZE (12)
+// 12 nopes
+#define NOP_SLED "nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;"
 
+const int X64ADDRESS_SIZE = 8;
+const int BYTE_SIZE = 8;
+const int ASIGN_OPCODE_OFFSET = 2;
 
 void hook_func_memory();
-void good();
+void good(int x);
 void bad();
 void fix_hooked();
 void second_fix_hook();
+void hook_manager();

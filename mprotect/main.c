@@ -1,11 +1,17 @@
 #include <hook.h>
 
-// Globals
-u_int64_t *bad_func = (u_int64_t *)&bad; //&bad;
-u_int64_t *good_func = (u_int64_t *)&good; //&bad;
-u_int64_t *fix_func = (u_int64_t *)&fix_hooked; //&bad;
-u_int64_t *second_fix = (u_int64_t *)&second_fix_hook; 
-char good_opcode[12] = { 0 };
+/*
+struct g_function_hook_dict
+{
+    char original_function_start_opcode[JMP_OPCODE_SIZE];
+    u_int64_t *original_address;
+    u_int64_t *hooked_address;
+    struct g_function_hook_dict *next;
+} typedef function_hook_dict; 
+*/
+
+u_int64_t *good_func = (u_int64_t *)&good;
+char good_opcode[JMP_OPCODE_SIZE] = { 0 };
 
 
 size_t get_fucntion_offset_to_return_address(void *function_ptr)
@@ -20,26 +26,29 @@ size_t get_fucntion_offset_to_return_address(void *function_ptr)
     return byte_counter;
 }
 
-
-void write_return_address_to_instruction_set(void *function_ptr, char *instruction_set)
+size_t get_negative_offset_to_the_function_start_address(void *function_ptr)
 {
-    size_t bytes_offset = get_fucntion_offset_to_return_address(&function_ptr);
-    memcpy(instruction_set, function_ptr + bytes_offset, 8);
-}
+     int byte_counter = 0;
 
+    while(((char *)function_ptr)[byte_counter] != 0x48)// &&
+        //((char *)function_ptr)[byte_counter - 1] != 0xb8)
+    {
+        printf("%hhX, ", ((char *)function_ptr)[byte_counter]);
+        byte_counter--;
+    }
+
+    return byte_counter;
+}
 
 void hook_func_memory(
         void *original_func_ptr, 
-        void *hook_func_ptr, 
         size_t start_offset, 
         u_int64_t *hook_func_address, 
         size_t opcode_size, 
         char *instruction)
 {
 	// functions pointers
-	u_int64_t *original_func = (u_int64_t *)original_func_ptr; //&good;
-	//u_int64_t *hook_func = (u_int64_t *)hook_func_ptr; //&bad;
-
+	u_int64_t *original_func = (u_int64_t *)original_func_ptr; 
 
 	// calculate offset and page size
 	size_t pagesize = sysconf(_SC_PAGE_SIZE);
@@ -68,87 +77,83 @@ void hook_func_memory(
 }
 
 
-void copy_hooked_function_instruction(void *function_ptr, char *instruction, size_t size_to_read)
-{
-	u_int64_t *hooked_function = (u_int64_t *)&function_ptr; //&bad;
-    memcpy(good_opcode, &hooked_function, 12);
-}
-
 void fix_hooked() 
 {
-	memcpy(good_func, good_opcode, 12);
-
-    __asm("NOP");
-    __asm("NOP");
-    __asm("NOP");
-    __asm("NOP");
-    __asm("NOP");
-    __asm("NOP");
-
-    //asm("push %0" : "=r" (second_fix));
+    printf("Hi to you all\n");
+	memcpy(good_func, good_opcode, JMP_OPCODE_SIZE);
 }
 
-void second_fix_hook()
+void hook(void *original_function, void *hooked_function)
 {
-    printf("\nHello Im here!!!");
-}
-
-void hook()
-{
-
-    size_t bad_ret_offset = get_fucntion_offset_to_return_address(&bad),
+    size_t bad_ret_offset = get_fucntion_offset_to_return_address(hooked_function),
            fix_ret_offset = get_fucntion_offset_to_return_address(&fix_hooked),
-           good_ret_offset = get_fucntion_offset_to_return_address(&good);
-    char jmp_rax_address_opcode[12] = \
-         {0x48, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-             0x00, 0x00, 0xff, 0xe0}; 
+           good_ret_offset = get_fucntion_offset_to_return_address(original_function),
+           hook_manager_ret_offset = get_fucntion_offset_to_return_address(hook_manager);
 
+    char jmp_rax_address_opcode[JMP_OPCODE_SIZE] = \
+         {0x48, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xe0}; 
 
-    memcpy(good_opcode, (char *)&good, 12);
+    char call_address_opcode[CALL_OPCODE_SIZE] = \
+         {0x48, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xd0};      
+    
+    u_int64_t *u_hook_manager = (u_int64_t *)hook_manager;//&bad; 
+    u_int64_t *bad_func = (u_int64_t *)hooked_function;//&bad; 
+    u_int64_t *u_fix_hooked = (u_int64_t *)&fix_hooked;
+
+    // save the opcode 
+    memcpy(good_opcode, (char *)original_function, JMP_OPCODE_SIZE);
 
     // first bytes of good is jmp to bad
-	hook_func_memory(&good, &bad, 0, bad_func, 12, jmp_rax_address_opcode);
+	hook_func_memory(original_function, 0, u_hook_manager, JMP_OPCODE_SIZE, call_address_opcode);
     
     // last bytes of bad is jmp to fix_hooked
-    hook_func_memory(&bad, &fix_hooked, bad_ret_offset, fix_func, 12, jmp_rax_address_opcode);
-
-    // last bytes of fix_hooked is jmp to good
-    hook_func_memory(&fix_hooked, &good, fix_ret_offset, good_func, 12, jmp_rax_address_opcode);
-   
-    //asm("push %0" : "=r" (second_fix));
-
-    // Hadded this!!
-    // last bytes of good is jmp to second_fix_hook
+    hook_func_memory(hook_manager, hook_manager_ret_offset - 8, bad_func, JMP_OPCODE_SIZE, jmp_rax_address_opcode);
     /*
-    hook_func_memory(&good, &second_fix_hook, good_ret_offset, second_fix, 12, jmp_rax_address_opcode);
+    // last bytes of fix_hooked is jmp to good
+    hook_func_memory(&fix_hooked, fix_ret_offset, good_func, JMP_OPCODE_SIZE, jmp_rax_address_opcode);
     */
-    //asm("push ")
 }
 
 int main()
 {
-    hook();
-    good();
+    hook(&good, &bad);
+    good(4);
 
 	return 0;
 }
 
-void good()
+void good(int x)
 {
+
+    printf("\nthe value is %d\n", x);
 	printf("h3llo world!\n");
+}
+
+u_int64_t get_return_address()
+{
+    asm("movq 8(%rbp), %rax;\n\t");
+}
+
+void hook_manager()
+{
+    // get return address and align it
+    intptr_t return_address;
+    asm("\t movq 8(%%rbp), %0" : "=r" (return_address));
+    return_address -= JMP_OPCODE_SIZE;
+
+    // calling the return address
+    void (*func_ptr)(void) = (void (*)(void))return_address;
+
+    memcpy((char *)func_ptr, good_opcode, JMP_OPCODE_SIZE);
+    func_ptr();
+
+    // NOP sled in order to inset the commands
+    asm(NOP_SLED);
 }
 
 void bad()
 {
-    int i = 0;
-    int x = 0;
-
-    for(i = 0; i < 15; i++)
-    {
-        x += i;
-    }
-
-    printf("x = %d\n", x);
-    
-	printf("Goodbye cruel world!\n");
+    //void (*func_ptr)(void) = (void (*)(void))return_address;
+    //int neg_ret_offset = 0;
+    printf("Im fucking badddd\n");
 }
