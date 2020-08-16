@@ -1,0 +1,19 @@
+
+FFFF
+-- >
+-- arg2
+-- arg1
+-- RET: main+70 (line after we called good() )
+-- RET: good+12 (after we called hook_function - with our hook)
+--+++ fix good (memcpy), CHANGE RETURN ADDRESS TO good INSTEAD good+12, then "jmp bad", return
+
+
+
+initial address (main+x)
+
+hook_manager (good, bad)
+bad ()
+second_fix_hook  (initial address) -- need to get good
+good = 0                                                                                  
+last_fix  // NEED main address, NEED good                                                                                
+main_end 
