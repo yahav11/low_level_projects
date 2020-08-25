@@ -17,7 +17,7 @@ struct g_hooked_functions
 
 u_int64_t *good_func = (u_int64_t *)&good;
 char good_opcode[JMP_OPCODE_SIZE] = { 0 };
-intptr_t caller_address = NULL;
+intptr_t caller_address = 0;
 
 size_t get_fucntion_offset_to_return_address(void *function_ptr)
 {
@@ -105,12 +105,11 @@ void hook(void *original_function, void *hooked_function)
 
 int main(void)
 {
-    int a = 2;
     int i = 0;
-    int b = 3;
-    int c = 4;
-    int d = 5;
-    printf("MAIN: %p\n", &main);
+    //printf("MAIN: %p\n", &main);
+    bad(3);
+
+
     hook(&good, &bad);
 
     good(5);
@@ -186,21 +185,33 @@ void last_fix()
     printf("after epi\n");
 
     // Jump to the caller
-    asm("\t jmp %0" : : "r" (caller_address)); 
+    asm("\t jmp *%0" : : "r" (caller_address)); 
 }
 
 void hook_manager()
 {
+    intptr_t rsp;
     // get return address and align it
+    asm("\t mov %%rbp, %0" : "=rm" (rsp));
+
+
+    printf("before = %p\n", rsp);
+    asm("\t call *%0" : : "r" (&bad));
+    //asm("\t sub $0x10, %rbp");
+
+    asm("\t mov %%rbp, %0" : "=rm" (rsp));
+    printf("after = %p\n", rsp);
+
+    asm("\t call *%0" : : "r" (&bad));
 
     // original function return address
     intptr_t original_function;
     asm("\t movq 8(%%rbp), %0" : "=r" (original_function));
+
     asm("\t movq 16(%%rbp), %0" : "=r" (caller_address));
     printf("CALLER TO GOOD IS ACTUALLY %p\n", caller_address);
 
     original_function -= JMP_OPCODE_SIZE;
-
 
     // calling the return address
     void (*func_ptr)(void) = (void (*)(void))original_function;
@@ -215,6 +226,7 @@ void hook_manager()
     // we need to inset to stuck the jumps to:
     // good, last_fix, main+x
 
+
     //asm("\t movq %0, 8(%%rbp)" : : "r" (&bad));  // TODO get from struct
     asm("\t movq %0, 8(%%rbp)" : : "r" (original_function));  
     asm("\t movq %0, 16(%%rbp)" : : "r" (&last_fix));  // intial address (rip before calling)
@@ -223,12 +235,11 @@ void hook_manager()
     //asm("\t movq %0, 40(%%rbp)" : : "r" (&main));  // TODO get caller address
     //asm(NOP_SLED);
     
-    //bad(6);
     printf("Returning from hook_manager, where to?\n");
     return;
 }
 
-void bad(int x)
+void bad(int *x)
 {
     printf("bad = %d\n", x);
 }
