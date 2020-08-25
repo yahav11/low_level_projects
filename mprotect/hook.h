@@ -24,8 +24,8 @@ const int ASIGN_OPCODE_OFFSET = 2;
 
 void hook_func_memory();
 u_int64_t get_return_address();
-void good(int x);
-void bad(int *x);
+void good(int x, int y);
+void bad(int x, int y);
 void fix_hook();
 void hook_manager();
 void last_fix();
