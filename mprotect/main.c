@@ -35,17 +35,11 @@ void hook_func_memory(
 
 void hook(void *original_function, void *hooked_function)
 {
-    char jmp_rax_address_opcode[JMP_OPCODE_SIZE] = \
-         {0x48, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xe0}; 
-
-    char call_address_opcode[CALL_OPCODE_SIZE] = \
-         {0x48, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xd0};      
-
     // save the opcode 
     memcpy(original_function_opcode, (char *)original_function, JMP_OPCODE_SIZE);
 
     // first bytes of good is jmp to bad
-	hook_func_memory(original_function, 0, (u_int64_t *)hook_manager, JMP_OPCODE_SIZE, call_address_opcode);
+	hook_func_memory(original_function, 0, (u_int64_t *)hook_manager, JMP_OPCODE_SIZE, CALL_ADDRESS_OPCODE);
 }
 
 int main(void)
@@ -53,7 +47,7 @@ int main(void)
     hook(&good, &bad);
 
     good(5, 6);
-    
+
     printf("ACTUALLY ENDED\n\n");
 
 	return 0;
@@ -66,12 +60,8 @@ u_int64_t get_return_address()
 
 void last_fix()
 {
-    intptr_t return_address;
-    asm("\t movq 8(%%rbp), %0" : "=r" (return_address));
-
-    // TO-DO: check y do I need it
-    char call_address_opcode[CALL_OPCODE_SIZE] = \
-         {0x48, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xd0};       
+    // This is padding for the stack
+    char padding[22];  
     
     hook(&good, &bad);
     
@@ -85,7 +75,7 @@ void last_fix()
 
 void hook_manager()
 {
-    intptr_t rsp, original_function;
+    intptr_t original_function;
 
     // get return address and align it
     asm(" \t pushq %rdi");
@@ -97,9 +87,8 @@ void hook_manager()
     asm("\t movq 8(%%rbp), %0" : "=r" (original_function));
     asm("\t movq 16(%%rbp), %0" : "=r" (caller_address));
 
-    //asm("\t int3");
-    // TO-TO: Check how can i delete it 
-    printf("%d\n");
+    // Fix stackframe using putchar
+    putchar(0);
 
     original_function -= JMP_OPCODE_SIZE;
 
@@ -120,7 +109,6 @@ void hook_manager()
     // fix fast call
     asm(" \t popq %rsi");
     asm(" \t popq %rdi");
-    return;
 }
 
 void bad(int x, int y)

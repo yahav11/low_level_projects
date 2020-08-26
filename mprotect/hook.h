@@ -16,6 +16,8 @@
 const int X64ADDRESS_SIZE = 8;
 const int BYTE_SIZE = 8;
 const int ASIGN_OPCODE_OFFSET = 2;
+char CALL_ADDRESS_OPCODE[CALL_OPCODE_SIZE] = \
+         {0x48, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xd0};     
 
 void hook_func_memory();
 u_int64_t get_return_address();
