@@ -1,9 +1,9 @@
-#include <hook.h>
+//#include <hook.h>
+#include <manage_hooks.h>
 
-
-//u_int64_t *good_func = (u_int64_t *)&good;
-char original_function_opcode[JMP_OPCODE_SIZE] = { 0 };
+char original_function_address_opcode[JMP_OPCODE_SIZE] = { 0 };
 intptr_t caller_address = 0;
+
 
 void hook_func_memory(
         void *original_func_ptr, 
@@ -33,20 +33,22 @@ void hook_func_memory(
 }
 
 
-void hook(void *original_function, void *hooked_function)
+void hook(void *original_function_address, void *hooked_function)
 {
     // save the opcode 
-    memcpy(original_function_opcode, (char *)original_function, JMP_OPCODE_SIZE);
+    memcpy(original_function_address_opcode, (char *)original_function_address, JMP_OPCODE_SIZE);
 
     // first bytes of good is jmp to bad
-	hook_func_memory(original_function, 0, (u_int64_t *)hook_manager, JMP_OPCODE_SIZE, CALL_ADDRESS_OPCODE);
+	hook_func_memory(original_function_address, 0, (u_int64_t *)hook_manager, JMP_OPCODE_SIZE, CALL_ADDRESS_OPCODE);
 }
 
 int main(void)
 {
     hook(&good, &bad);
+    insertFirst(&good, &bad);
 
     good(5, 6);
+
 
     printf("ACTUALLY ENDED\n\n");
 
@@ -75,7 +77,7 @@ void last_fix()
 
 void hook_manager()
 {
-    intptr_t original_function;
+    intptr_t original_function_address;
 
     // get return address and align it
     asm(" \t pushq %rdi");
@@ -84,18 +86,18 @@ void hook_manager()
     asm("\t call *%0" : : "r" (&bad));
 
     // original function return address
-    asm("\t movq 8(%%rbp), %0" : "=r" (original_function));
+    asm("\t movq 8(%%rbp), %0" : "=r" (original_function_address));
     asm("\t movq 16(%%rbp), %0" : "=r" (caller_address));
 
     // Fix stackframe using putchar
     putchar(0);
 
-    original_function -= JMP_OPCODE_SIZE;
+    original_function_address -= JMP_OPCODE_SIZE;
 
     // calling the return address
-    void (*func_ptr)(void) = (void (*)(void))original_function;
+    void (*func_ptr)(void) = (void (*)(void))original_function_address;
 
-    memcpy((char *)func_ptr, original_function_opcode, JMP_OPCODE_SIZE);
+    memcpy((char *)func_ptr, original_function_address_opcode, JMP_OPCODE_SIZE);
     
     // change return address of the next function you are going to call
     
@@ -103,7 +105,7 @@ void hook_manager()
     // we need to inset to stuck the jumps to:
     // good, last_fix, main+x
 
-    asm("\t movq %0, 8(%%rbp)" : : "r" (original_function));  
+    asm("\t movq %0, 8(%%rbp)" : : "r" (original_function_address));  
     asm("\t movq %0, 16(%%rbp)" : : "r" (&last_fix));  // intial address (rip before calling)
     
     // fix fast call
