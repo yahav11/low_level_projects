@@ -4,21 +4,6 @@
 #include <stdbool.h>
 #include <hook.h>
 
-struct node {
-   //int data;  // delete later
-   //int key;   // delete later
-
-   intptr_t *original_function;
-   intptr_t *hooked_function;
-
-   char original_function_address_opcode[JMP_OPCODE_SIZE];
-   intptr_t caller_address;
-
-   struct node *next;
-};
-
-struct node *head = NULL;
-struct node *current = NULL;
 
 //display the list
 /*
@@ -36,7 +21,7 @@ void printList() {
 }*/
 
 //insert link at the first location
-void insertFirst(void *original_function, void *hooked_function) {
+void push_hook(void *original_function, void *hooked_function) {
    //create a link
    struct node *link = (struct node*) malloc(sizeof(struct node));
 	
@@ -51,6 +36,8 @@ void insertFirst(void *original_function, void *hooked_function) {
 	
    //point first to new first node
    head = link;
+
+   hook(original_function, hooked_function, link);
 }
 
 //delete first item
@@ -67,7 +54,7 @@ struct node* deleteFirst() {
 }
 
 //find a link with given key
-struct node* find(void *original_function) {
+struct node* find_node(void *original_function) {
 
    //start from the first link
    struct node* current = head;
@@ -130,6 +117,12 @@ struct node* delete(void *original_function) {
 	
    return current;
 }
+
+
+
+
+
+
 /*
 void main() {
    insertFirst(1,10);

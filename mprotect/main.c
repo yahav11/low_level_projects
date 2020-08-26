@@ -1,8 +1,4 @@
-//#include <hook.h>
 #include <manage_hooks.h>
-
-char original_function_address_opcode[JMP_OPCODE_SIZE] = { 0 };
-intptr_t caller_address = 0;
 
 
 void hook_func_memory(
@@ -33,22 +29,12 @@ void hook_func_memory(
 }
 
 
-void hook(void *original_function_address, void *hooked_function)
-{
-    // save the opcode 
-    memcpy(original_function_address_opcode, (char *)original_function_address, JMP_OPCODE_SIZE);
-
-    // first bytes of good is jmp to bad
-	hook_func_memory(original_function_address, 0, (u_int64_t *)hook_manager, JMP_OPCODE_SIZE, CALL_ADDRESS_OPCODE);
-}
-
 int main(void)
 {
-    hook(&good, &bad);
-    insertFirst(&good, &bad);
+    printf("main is : %p\n", &main);
+    push_hook(&good, &bad);
 
     good(5, 6);
-
 
     printf("ACTUALLY ENDED\n\n");
 
@@ -64,40 +50,58 @@ void last_fix()
 {
     // This is padding for the stack
     char padding[22];  
-    
-    hook(&good, &bad);
+    struct node* current_node;
+    intptr_t original_caller;
+
+
+    hook(&good, &bad, current_node);
     
     // Fix stack before jump to original rip
     asm("\t add $0x20, %rsp");
     asm("\t popq %rbp");
+    
+    //ontime_original_function = original_function_address;
+    //ontime_hooked_function = current_node->hooked_function;
+    //ontime_caller_address
 
     // Jump to the caller
-    asm("\t jmp *%0" : : "r" (caller_address)); 
+    asm("\t jmp *%0" : : "r" (ontime_caller_address)); 
 }
 
 void hook_manager()
 {
     intptr_t original_function_address;
+    struct node* current_node;
 
-    // get return address and align it
+    // Save fastcall opcodes
     asm(" \t pushq %rdi");
     asm(" \t pushq %rsi");
-    
-    asm("\t call *%0" : : "r" (&bad));
 
     // original function return address
     asm("\t movq 8(%%rbp), %0" : "=r" (original_function_address));
-    asm("\t movq 16(%%rbp), %0" : "=r" (caller_address));
 
+    // Find the current node that contains all the information about the jook
+    current_node = find_node((void *)(original_function_address - JMP_OPCODE_SIZE));
+
+    // Restore fastcall opcodes and save them again
+    asm(" \t popq %rsi");
+    asm(" \t popq %rdi");
+    asm(" \t pushq %rdi");
+    asm(" \t pushq %rsi");
+
+    asm("\t call *%0" : : "r" (current_node->hooked_function));
+    asm("\t movq 16(%%rbp), %0" : "=r" (current_node->caller_address));
+    
     // Fix stackframe using putchar
     putchar(0);
 
     original_function_address -= JMP_OPCODE_SIZE;
 
+
     // calling the return address
     void (*func_ptr)(void) = (void (*)(void))original_function_address;
 
-    memcpy((char *)func_ptr, original_function_address_opcode, JMP_OPCODE_SIZE);
+    memcpy((char *)func_ptr, current_node->original_function_address_opcode, JMP_OPCODE_SIZE);
     
     // change return address of the next function you are going to call
     
@@ -107,7 +111,12 @@ void hook_manager()
 
     asm("\t movq %0, 8(%%rbp)" : : "r" (original_function_address));  
     asm("\t movq %0, 16(%%rbp)" : : "r" (&last_fix));  // intial address (rip before calling)
-    
+
+
+    ontime_original_function = (intptr_t)original_function_address;
+    ontime_hooked_function = (intptr_t)current_node->hooked_function;
+    ontime_caller_address = (intptr_t)current_node->caller_address;
+
     // fix fast call
     asm(" \t popq %rsi");
     asm(" \t popq %rdi");
