@@ -13,11 +13,6 @@
 #define CALL_OPCODE_SIZE (12)
 #define STDCALL __attribute__((stdcall))
 
-// 12 nopes
-#define NOP_SLED "nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;"
-
-
-
 const int X64ADDRESS_SIZE = 8;
 const int BYTE_SIZE = 8;
 const int ASIGN_OPCODE_OFFSET = 2;

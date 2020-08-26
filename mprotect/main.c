@@ -1,21 +1,9 @@
 #include <hook.h>
 
 
-u_int64_t *good_func = (u_int64_t *)&good;
-char good_opcode[JMP_OPCODE_SIZE] = { 0 };
+//u_int64_t *good_func = (u_int64_t *)&good;
+char original_function_opcode[JMP_OPCODE_SIZE] = { 0 };
 intptr_t caller_address = 0;
-
-size_t get_fucntion_offset_to_return_address(void *function_ptr)
-{
-    int byte_counter = 0;
-
-    while(((char *)function_ptr)[byte_counter] != RETURN_OPCODE)
-    {
-        byte_counter++;
-    }
-
-    return byte_counter;
-}
 
 void hook_func_memory(
         void *original_func_ptr, 
@@ -24,12 +12,9 @@ void hook_func_memory(
         size_t opcode_size, 
         char *instruction)
 {
-	// functions pointers
-	u_int64_t *original_func = (u_int64_t *)original_func_ptr; 
-
 	// calculate offset and page size
 	size_t pagesize = sysconf(_SC_PAGE_SIZE);
-	intptr_t start = (intptr_t)original_func,
+	intptr_t start = (intptr_t)original_func_ptr,
              end = start + 1,
              page_start = start & -pagesize; 
 
@@ -44,31 +29,23 @@ void hook_func_memory(
 	}
 
     // copy the instruction set to the func address
-	memcpy(((char *)original_func) + start_offset, instruction, opcode_size);
+	memcpy(((char *)original_func_ptr) + start_offset, instruction, opcode_size);
 }
 
 
 void hook(void *original_function, void *hooked_function)
 {
-    size_t bad_ret_offset = get_fucntion_offset_to_return_address(hooked_function),
-           //fix_ret_offset = get_fucntion_offset_to_return_address(&fix_hooked),
-           good_ret_offset = get_fucntion_offset_to_return_address(original_function),
-           hook_manager_ret_offset = get_fucntion_offset_to_return_address(hook_manager);
-
     char jmp_rax_address_opcode[JMP_OPCODE_SIZE] = \
          {0x48, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xe0}; 
 
     char call_address_opcode[CALL_OPCODE_SIZE] = \
          {0x48, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xd0};      
-    
-    u_int64_t *u_hook_manager = (u_int64_t *)hook_manager;//&bad; 
-    u_int64_t *bad_func = (u_int64_t *)hooked_function;//&bad; 
 
     // save the opcode 
-    memcpy(good_opcode, (char *)original_function, JMP_OPCODE_SIZE);
+    memcpy(original_function_opcode, (char *)original_function, JMP_OPCODE_SIZE);
 
     // first bytes of good is jmp to bad
-	hook_func_memory(original_function, 0, u_hook_manager, JMP_OPCODE_SIZE, call_address_opcode);
+	hook_func_memory(original_function, 0, (u_int64_t *)hook_manager, JMP_OPCODE_SIZE, call_address_opcode);
 }
 
 int main(void)
@@ -92,14 +69,13 @@ void last_fix()
     intptr_t return_address;
     asm("\t movq 8(%%rbp), %0" : "=r" (return_address));
 
+    // TO-DO: check y do I need it
     char call_address_opcode[CALL_OPCODE_SIZE] = \
          {0x48, 0xb8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xd0};       
-
-    // hook original function all over again
-    u_int64_t *u_hook_manager = (u_int64_t *)hook_manager;  //&bad;  
     
     hook(&good, &bad);
     
+    // Fix stack before jump to original rip
     asm("\t add $0x20, %rsp");
     asm("\t popq %rbp");
 
@@ -109,7 +85,7 @@ void last_fix()
 
 void hook_manager()
 {
-    intptr_t rsp;
+    intptr_t rsp, original_function;
 
     // get return address and align it
     asm(" \t pushq %rdi");
@@ -117,21 +93,20 @@ void hook_manager()
     
     asm("\t call *%0" : : "r" (&bad));
 
-
     // original function return address
-    intptr_t original_function;
     asm("\t movq 8(%%rbp), %0" : "=r" (original_function));
     asm("\t movq 16(%%rbp), %0" : "=r" (caller_address));
 
+    //asm("\t int3");
     // TO-TO: Check how can i delete it 
-    printf("CALLER TO GOOD IS ACTUALLY %p\n", caller_address);
+    printf("%d\n");
 
     original_function -= JMP_OPCODE_SIZE;
 
     // calling the return address
     void (*func_ptr)(void) = (void (*)(void))original_function;
 
-    memcpy((char *)func_ptr, good_opcode, JMP_OPCODE_SIZE);
+    memcpy((char *)func_ptr, original_function_opcode, JMP_OPCODE_SIZE);
     
     // change return address of the next function you are going to call
     
